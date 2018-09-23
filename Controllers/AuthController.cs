@@ -20,8 +20,6 @@ namespace DatingApp.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(UserDto userDto)
         {
-            // TODO: validate request
-
             userDto.Username = userDto.Username.ToLower();
 
             if(await _repo.UserExistes(userDto.Username)){
