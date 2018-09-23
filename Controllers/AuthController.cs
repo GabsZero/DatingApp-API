@@ -1,11 +1,12 @@
 using System.Threading.Tasks;
 using DatingApp.API.Data;
+using DatingApp.API.Dtos;
 using DatingApp.API.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DatingApp.API.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
     {
@@ -16,23 +17,23 @@ namespace DatingApp.API.Controllers
             _repo = repo;
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Register(string username, string password)
+        [HttpPost("register")]
+        public async Task<IActionResult> Register(UserDto userDto)
         {
             // TODO: validate request
 
-            username = username.ToLower();
+            userDto.Username = userDto.Username.ToLower();
 
-            if(await _repo.UserExistes(username)){
+            if(await _repo.UserExistes(userDto.Username)){
                 return BadRequest("Username already exists!");
             }    
 
             //creating the new user
             var newUser = new User{
-                Username = username,
+                Username = userDto.Username,
             };
 
-            var user = await _repo.Register(newUser, password);
+            var user = await _repo.Register(newUser, userDto.Password);
 
             // TODO: usar o método CreatedAtRoute
             return StatusCode(201);
