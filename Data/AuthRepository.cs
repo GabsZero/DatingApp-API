@@ -1,20 +1,29 @@
 using System;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using DatingApp.API.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 
 namespace DatingApp.API.Data
 {
     public class AuthRepository : IAuthRepository
     {
         private readonly DataContext _db;
+        private readonly IConfiguration _config;
 
-        public AuthRepository(DataContext db)
+        public AuthRepository(DataContext db, IConfiguration config)
         {
             _db = db;
+            _config = config;
         }
-        public async Task<User> Login(string username, string password)
+        public async Task<string> Login(string username, string password)
         {
+            username = username.ToLower();
+
             var user = await _db.Users.FirstOrDefaultAsync(x => x.Username == username);
 
             if(user == null){
@@ -26,8 +35,13 @@ namespace DatingApp.API.Data
                 return null;
             }
 
-            //we can return the user here, if everything else went ok
-            return user;
+            //if a user was successfully retrieved from database
+            //we begin the construction of our JWT token
+
+            var token = this.ConfigureToken(user);
+
+            return token;
+
         }
 
         private bool VerifyPasswordHash(string password, byte[] passwordHash, byte[] passwordSalt)
@@ -49,6 +63,7 @@ namespace DatingApp.API.Data
 
         public async Task<User> Register(User user, string password)
         {
+            user.Username = user.Username.ToLower();
             byte[] passwordHash, passwordSalt;
 
             // creating hashs
@@ -64,6 +79,34 @@ namespace DatingApp.API.Data
             return user;
         }
 
+        private string ConfigureToken(User user){
+            var claims = new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.Username),
+            };
+
+            var key = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(_config.GetSection("AppSettings:Token").Value)
+                    );
+            //now that we have our key, we can build the credential
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+
+            var tokenDescriptor = new SecurityTokenDescriptor{
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.Now.AddDays(1),
+                SigningCredentials = creds
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+
+            var securityToken = tokenHandler.CreateToken(tokenDescriptor);
+
+            var token = tokenHandler.WriteToken(securityToken);
+
+            return token;
+        }
+
         private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
         {
             using(var hmac = new System.Security.Cryptography.HMACSHA512())
@@ -73,8 +116,11 @@ namespace DatingApp.API.Data
             }
         }
 
-        public async Task<bool> UserExistes(string username)
+        public async Task<bool> UserExists(string username)
         {
+            //
+            username = username.ToLower();
+
             if(await _db.Users.AnyAsync(x => x.Username == username)){
                 //found that username in our database
                 return true;
